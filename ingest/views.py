@@ -395,9 +395,12 @@ class BaseIngestAPIView(View):
             issue = grouping.issue
             issue_created = False
 
-            # update the denormalized fields
+            # update the denormalized fields; calculated_type/value track the latest event so the issue title
+            # reflects the most recent exception (otherwise it stays frozen to the first event's message).
             issue.last_seen = ingested_at
             issue.digested_event_count += 1
+            issue.calculated_type = calculated_type
+            issue.calculated_value = calculated_value
 
         except Grouping.DoesNotExist:
             # we don't have Project.issue_count here ('premature optimization') so we just do an aggregate instead.
@@ -705,6 +708,9 @@ class IngestEventAPIView(BaseIngestAPIView):
         performance_logger.info("ingested event with %s bytes", len(event_data_bytes))
 
         event_data = json.loads(event_data_bytes)
+        if "event_id" not in event_data:
+            event_data["event_id"] = uuid.uuid4().hex
+
         filename = get_filename_for_event_id(ingestion_id)
         b108_makedirs(os.path.dirname(filename))
         with open(filename, 'w') as f:
